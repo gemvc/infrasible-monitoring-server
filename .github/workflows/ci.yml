@@ -1,0 +1,36 @@
+# Fast verify on every push/PR — same checks as: bash scripts/ci-cd.sh check
+# Does NOT build packages or publish releases. See docs/phases/P09-CI_CD.md
+name: Relay CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: gofmt
+        run: |
+          set -euo pipefail
+          unformatted="$(gofmt -l .)"
+          if [[ -n "$unformatted" ]]; then
+            echo "::error::Run: gofmt -w ."
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: tidy
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+      - name: vet and test
+        run: |
+          go vet ./...
+          go test -race -count=1 ./...

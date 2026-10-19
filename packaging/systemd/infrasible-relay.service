@@ -1,0 +1,20 @@
+[Unit]
+Description=Infrasible Monitoring Relay (Live Bridge)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=infrasible-relay
+Group=infrasible-relay
+ExecStart=/usr/bin/infrasible-relay run --config=/etc/infrasible-relay/config.json
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/infrasible-relay
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

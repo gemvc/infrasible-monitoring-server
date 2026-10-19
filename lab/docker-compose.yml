@@ -1,0 +1,69 @@
+# Complete Docker Desktop lab: bootstrap PKI/ACL → Relay ← Agent (Live WSS/mTLS)
+#
+# From repo root:
+#   docker compose -f lab/docker-compose.yml up --build
+#   ./scripts/lab-up.sh
+#
+# Prove Live: relay logs show session.accepted + hub.publish_live (RELAY_LOG_LEVEL=debug)
+
+name: infrasible-lab
+
+services:
+  bootstrap:
+    build:
+      context: ..
+      dockerfile: lab/Dockerfile.bootstrap
+      args:
+        AGENT_REPO: ${AGENT_REPO:-https://github.com/gemvc/infrasible-agent.git}
+        AGENT_REF: ${AGENT_REF:-main}
+    volumes:
+      - labdata:/lab
+    environment:
+      LAB_DIR: /lab
+      RELAY_HOST: relay
+      RELAY_PORT: "8443"
+      ENDPOINT_ID: relay-primary
+
+  relay:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    user: "0:0"
+    environment:
+      RELAY_LOG_LEVEL: debug
+      RELAY_ADMIN_ADDR: "0.0.0.0:9090"
+    volumes:
+      - labdata:/lab:ro
+    command: ["run", "--config=/lab/relay/config.json"]
+    ports:
+      - "8443:8443"
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD", "infrasible-relay", "config", "validate", "--config=/lab/relay/config.json"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+
+  agent:
+    build:
+      context: ..
+      dockerfile: lab/Dockerfile.agent
+      args:
+        AGENT_REPO: ${AGENT_REPO:-https://github.com/gemvc/infrasible-agent.git}
+        AGENT_REF: ${AGENT_REF:-main}
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+      relay:
+        condition: service_started
+    user: "0:0"
+    volumes:
+      - labdata:/lab
+    command: ["run", "--config=/lab/agent/config.json"]
+
+volumes:
+  labdata:

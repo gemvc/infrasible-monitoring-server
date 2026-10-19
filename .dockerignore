@@ -1,0 +1,8 @@
+.git
+.DS_Store
+/dist/
+/testdata/certs/
+*.md
+!VERSION.md
+docs/
+agent-transcripts/

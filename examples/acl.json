@@ -1,0 +1,13 @@
+{
+  "acl_version": 1,
+  "endpoint_id": "relay-primary",
+  "agents": [
+    {
+      "agent_id": "agt_01HEXAMPLE",
+      "cert_fingerprint_sha256": "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
+      "channels": ["live"],
+      "live_endpoints": ["relay-primary"],
+      "comment": "replace fingerprint with lab/agent client cert SHA-256"
+    }
+  ]
+}

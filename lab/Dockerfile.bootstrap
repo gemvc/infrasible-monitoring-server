@@ -1,0 +1,21 @@
+# One-shot lab bootstrap: PKI + seed Agent DB + ACL + configs on a shared volume.
+ARG AGENT_REPO=https://github.com/gemvc/infrasible-agent.git
+ARG AGENT_REF=main
+
+FROM golang:1.23-bookworm AS agentbuild
+ARG AGENT_REPO
+ARG AGENT_REF
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+RUN git clone --depth 1 --branch "${AGENT_REF}" "${AGENT_REPO}" .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/infrasible-agent .
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      openssl ca-certificates jq \
+  && rm -rf /var/lib/apt/lists/*
+COPY --from=agentbuild /out/infrasible-agent /usr/bin/infrasible-agent
+COPY lab/bootstrap.sh /bootstrap.sh
+RUN chmod +x /bootstrap.sh
+ENTRYPOINT ["/bootstrap.sh"]
