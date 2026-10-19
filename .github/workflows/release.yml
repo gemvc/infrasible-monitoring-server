@@ -1,5 +1,6 @@
-# Package + publish when ci-cd.sh release pushes tag vX.Y.Z
-# Does NOT run on ordinary pushes to main. See docs/phases/P09-CI_CD.md
+# Package + publish when ci-cd.sh release pushes tag vX.Y.Z on a main commit.
+# Tag pushes are not branch pushes — ordinary pushes to main never release.
+# See docs/phases/P09-CI_CD.md
 name: Relay Release
 on:
   push:
@@ -15,6 +16,16 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Require tag commit is on main
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
+            echo "Tag ${GITHUB_REF_NAME} points at $GITHUB_SHA which is not on main — refuse release"
+            exit 1
+          }
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
