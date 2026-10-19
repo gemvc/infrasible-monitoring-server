@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Release helper. Daily work stays normal git add / commit / push.
+# GitHub Actions run only on tag vX.Y.Z (Relay Release) — not on ordinary main pushes.
 #
 #   bash scripts/ci-cd.sh last              # show current + latest released version
-#   bash scripts/ci-cd.sh version X.Y.Z     # bump, commit, push, watch Relay CI
+#   bash scripts/ci-cd.sh version X.Y.Z     # bump, local check, commit, push
 #   bash scripts/ci-cd.sh release X.Y.Z     # tag, push, watch Relay Release
-#   bash scripts/ci-cd.sh watch             # gh run watch (any run)
+#   bash scripts/ci-cd.sh watch             # gh run watch (release runs)
 #   bash scripts/ci-cd.sh web               # gh run view --web
-#   bash scripts/ci-cd.sh check             # optional local gate
+#   bash scripts/ci-cd.sh check             # local gate (gofmt, tidy, vet, race tests)
 #   bash scripts/ci-cd.sh help
 #
 # Semver single source of truth: VERSION.md (one line, X.Y.Z).
@@ -80,9 +81,9 @@ require_release_pipeline() {
   fi
   # Tag triggers workflows from the tagged commit; files must already be on origin/main.
   git show "origin/main:.github/workflows/release.yml" >/dev/null 2>&1 || \
-    die "origin/main has no .github/workflows/release.yml — commit, push, wait for green CI, then release"
+    die "origin/main has no .github/workflows/release.yml — commit and push it, then release"
   git show "origin/main:scripts/package-linux.sh" >/dev/null 2>&1 || \
-    die "origin/main has no scripts/package-linux.sh — commit, push, wait for green CI, then release"
+    die "origin/main has no scripts/package-linux.sh — commit and push it, then release"
 }
 
 # watch_release_run waits for the Relay Release run for tag v$ver; removes orphan tag if none starts.
@@ -217,15 +218,9 @@ cmd_version() {
 
   info "git push origin main"
   git push origin HEAD
-  ok "pushed — watching Relay CI"
+  ok "pushed v$ver prepare to main (no GitHub Actions on ordinary pushes)"
   echo
-  need_gh
-  # Brief pause so the new workflow run is visible to gh.
-  sleep 2
-  gh run watch --exit-status
-  ok "Relay CI green for v$ver prepare"
-  echo
-  echo "When ready to publish:"
+  echo "When ready to publish (GitHub verifies + packages once on the tag):"
   echo "  bash scripts/ci-cd.sh release $ver"
 }
 
@@ -256,9 +251,9 @@ cmd_release() {
   [[ -n "$ver" ]] || die "usage: bash scripts/ci-cd.sh release X.Y.Z"
   require_semver "$ver"
 
+  # Local suite already ran in `version` / `check`. GitHub Release is the remote gate.
   guardrails
   assert_version_in_sync
-  fmt_tidy_vet_test
 
   local source_ver
   source_ver="$(relay_version)"
@@ -274,7 +269,7 @@ cmd_release() {
 
   git fetch origin main
   [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] || \
-    die "main != origin/main — git push first, wait for green CI"
+    die "main != origin/main — git push first"
 
   require_release_pipeline
 
@@ -304,19 +299,20 @@ cmd_help() {
 scripts/ci-cd.sh
 
 Semver SSOT: VERSION.md (one line, X.Y.Z). version.go is synced from it.
+GitHub Actions: only Relay Release on tag vX.Y.Z (commit must be on main).
 
 Daily (you):
   git add … && git commit -m "…" && git push
+  bash scripts/ci-cd.sh check            # optional local gate
 
 New release:
   bash scripts/ci-cd.sh last
-  bash scripts/ci-cd.sh version X.Y.Z    # write VERSION.md + sync version.go + CI
-  bash scripts/ci-cd.sh release X.Y.Z    # tag + push + watch Relay Release
+  bash scripts/ci-cd.sh version X.Y.Z    # bump + local check + push (no Actions)
+  bash scripts/ci-cd.sh release X.Y.Z    # tag + watch Relay Release (verify/package/publish)
 
 Optional:
   bash scripts/ci-cd.sh watch
   bash scripts/ci-cd.sh web
-  bash scripts/ci-cd.sh check
   bash scripts/ci-cd.sh help
 EOF
 }
