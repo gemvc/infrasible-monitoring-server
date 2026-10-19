@@ -69,6 +69,48 @@ guardrails() {
   fi
 }
 
+# require_release_pipeline refuses to tag unless Relay Release can actually run.
+require_release_pipeline() {
+  local missing=()
+  [[ -f .github/workflows/release.yml ]] || missing+=(".github/workflows/release.yml")
+  [[ -f scripts/package-linux.sh ]] || missing+=("scripts/package-linux.sh")
+  [[ -f packaging/systemd/infrasible-relay.service ]] || missing+=("packaging/systemd/infrasible-relay.service")
+  if ((${#missing[@]})); then
+    die "cannot release — missing: ${missing[*]} (see docs/phases/P09-CI_CD.md)"
+  fi
+  # Tag triggers workflows from the tagged commit; files must already be on origin/main.
+  git show "origin/main:.github/workflows/release.yml" >/dev/null 2>&1 || \
+    die "origin/main has no .github/workflows/release.yml — commit, push, wait for green CI, then release"
+  git show "origin/main:scripts/package-linux.sh" >/dev/null 2>&1 || \
+    die "origin/main has no scripts/package-linux.sh — commit, push, wait for green CI, then release"
+}
+
+# watch_release_run waits for the Relay Release run for tag v$ver; removes orphan tag if none starts.
+watch_release_run() {
+  local ver="$1"
+  local run_id=""
+  local i
+  need_gh
+  for i in $(seq 1 20); do
+    run_id="$(
+      gh run list --workflow=release.yml --limit 10 \
+        --json databaseId,headBranch \
+        --jq ".[] | select(.headBranch == \"v${ver}\") | .databaseId" \
+        | head -1
+    )"
+    [[ -n "$run_id" ]] && break
+    sleep 2
+  done
+  if [[ -z "$run_id" ]]; then
+    info "Relay Release did not start — removing orphan tag v$ver"
+    git push origin ":refs/tags/v$ver" >/dev/null 2>&1 || true
+    git tag -d "v$ver" >/dev/null 2>&1 || true
+    die "no Relay Release run for v$ver (is release.yml on the tagged commit?)"
+  fi
+  info "watching Relay Release run $run_id"
+  gh run watch "$run_id" --exit-status
+}
+
 fmt_tidy_vet_test() {
   info "gofmt -w ."
   gofmt -w .
@@ -234,6 +276,8 @@ cmd_release() {
   [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] || \
     die "main != origin/main — git push first, wait for green CI"
 
+  require_release_pipeline
+
   if git ls-remote --exit-code --refs origin "refs/tags/v$ver" >/dev/null 2>&1; then
     die "origin already has tag v$ver"
   fi
@@ -248,9 +292,7 @@ cmd_release() {
   git push origin "v$ver"
   ok "tag v$ver pushed — watching Relay Release"
   echo
-  need_gh
-  sleep 2
-  gh run watch --exit-status
+  watch_release_run "$ver"
   ok "Relay Release finished for v$ver"
   echo
   echo "View: gh release view v$ver"

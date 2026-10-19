@@ -1,0 +1,13 @@
+{
+  "config_version": 1,
+  "listen_addr": ":8443",
+  "live_path": "/v2/agents/live",
+  "endpoint_id": "relay-primary",
+  "server_cert_file": "/var/lib/infrasible-relay/server.crt",
+  "server_key_file": "/var/lib/infrasible-relay/server.key",
+  "client_ca_file": "/etc/infrasible-relay/agents-ca.pem",
+  "acl_file": "/etc/infrasible-relay/acl.json",
+  "heartbeat_seconds": 15,
+  "max_message_bytes": 262144,
+  "hub": "log"
+}

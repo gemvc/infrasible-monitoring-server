@@ -1,0 +1,30 @@
+#!/bin/sh
+# Staging-oriented postinst: create service account and directories.
+# Does not enable or start the daemon; operator stages certs then activates.
+set -e
+
+case "$1" in
+configure)
+	if ! getent passwd infrasible-relay >/dev/null 2>&1; then
+		useradd --system --home-dir /var/lib/infrasible-relay --shell /usr/sbin/nologin \
+			--comment "Infrasible Monitoring Relay" infrasible-relay
+	fi
+	install -d -m 0750 -o infrasible-relay -g infrasible-relay /var/lib/infrasible-relay
+	install -d -m 0750 -o root -g infrasible-relay /etc/infrasible-relay
+	if [ ! -e /etc/infrasible-relay/config.json ]; then
+		install -m 0640 -o root -g infrasible-relay \
+			/usr/share/infrasible-relay/config.example.json \
+			/etc/infrasible-relay/config.json
+	fi
+	if [ ! -e /etc/infrasible-relay/acl.json ]; then
+		install -m 0640 -o root -g infrasible-relay \
+			/usr/share/infrasible-relay/acl.example.json \
+			/etc/infrasible-relay/acl.json
+	fi
+	if command -v systemctl >/dev/null 2>&1; then
+		systemctl daemon-reload || true
+	fi
+	;;
+esac
+
+exit 0

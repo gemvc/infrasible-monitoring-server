@@ -1,0 +1,15 @@
+#!/bin/sh
+# On purge, remove packaged config only. Data under /var/lib is retained for recovery.
+set -e
+
+case "$1" in
+purge)
+	rm -f /etc/infrasible-relay/config.json /etc/infrasible-relay/acl.json
+	rmdir /etc/infrasible-relay 2>/dev/null || true
+	if command -v systemctl >/dev/null 2>&1; then
+		systemctl daemon-reload || true
+	fi
+	;;
+esac
+
+exit 0
