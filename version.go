@@ -5,7 +5,7 @@ package relayversion
 // scripts/ci-cd.sh version keeps this constant in sync.
 //
 // Exported as Version for cmd/ and other packages.
-const relayVersion = "0.1.0"
+const relayVersion = "0.2.0"
 
 // Version is the exported product semver (same value as relayVersion).
 const Version = relayVersion
