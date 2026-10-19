@@ -60,31 +60,38 @@ for target in amd64 arm64 armv7 armv6; do
   fi
 done
 
-# A generic, service-free RPM for x86_64. Other RPM distributions can use tar.gz.
+# Full RPM (binary + systemd + examples + user/dirs) for amd64 and arm64.
+# Other arches: use tar.gz. Requires rpmbuild (CI installs rpm on Ubuntu).
+SPEC_IN=packaging/rpm/infrasible-relay.spec.in
+[[ -f "$SPEC_IN" ]] || { echo "missing $SPEC_IN" >&2; exit 1; }
 if command -v rpmbuild >/dev/null 2>&1; then
-  top="$(mktemp -d)"
-  mkdir -p "$top"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-  cp dist/infrasible-relay-linux-amd64 "$top/SOURCES/infrasible-relay"
-  cat > "$top/SPECS/infrasible-relay.spec" <<EOF
-Name: infrasible-relay
-Version: $VERSION
-Release: 1
-Summary: Infrasible monitoring Live bridge
-License: Apache-2.0
-BuildArch: x86_64
-%description
-Infrasible monitoring Live bridge with inbound mTLS for Agents.
-%prep
-%build
-%install
-mkdir -p %{buildroot}/usr/bin
-install -m 0755 %{_sourcedir}/infrasible-relay %{buildroot}/usr/bin/infrasible-relay
-%files
-/usr/bin/infrasible-relay
-EOF
-  rpmbuild -bb --define "_topdir $top" "$top/SPECS/infrasible-relay.spec"
-  find "$top/RPMS" -type f -name '*.rpm' -exec cp {} dist/ \;
-  rm -rf "$top"
+  for rpm_target in amd64 arm64; do
+    case "$rpm_target" in
+      amd64) rpmarch=x86_64 ;;
+      arm64) rpmarch=aarch64 ;;
+    esac
+    top="$(mktemp -d)"
+    mkdir -p "$top"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+    cp "dist/infrasible-relay-linux-$rpm_target" "$top/SOURCES/infrasible-relay"
+    cp "$SERVICE" "$top/SOURCES/infrasible-relay.service"
+    cp "$CONFIG_EXAMPLE" "$top/SOURCES/config.example.json"
+    cp "$ACL_EXAMPLE" "$top/SOURCES/acl.example.json"
+    cp LICENSE "$top/SOURCES/LICENSE"
+    sed -e "s/@@VERSION@@/$VERSION/g" -e "s/@@BUILDARCH@@/$rpmarch/g" \
+      "$SPEC_IN" > "$top/SPECS/infrasible-relay.spec"
+    if rpmbuild -bb --define "_topdir $top" --target "$rpmarch-linux" \
+      "$top/SPECS/infrasible-relay.spec"; then
+      find "$top/RPMS" -type f -name '*.rpm' -exec cp {} dist/ \;
+    else
+      if [[ "$rpm_target" == "amd64" ]]; then
+        echo "rpmbuild failed for $rpmarch" >&2
+        rm -rf "$top"
+        exit 1
+      fi
+      echo "warn: skip $rpmarch RPM (host cannot target it); use tar.gz" >&2
+    fi
+    rm -rf "$top"
+  done
 fi
 
 (

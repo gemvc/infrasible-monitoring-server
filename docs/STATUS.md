@@ -11,9 +11,9 @@ This file is the only place that states whether the brief and implementation are
 |---|---|
 | Implementer brief (`PROMPT.md`) | **READY** — open gate P10 closed with evidence |
 | Relay Go implementation | **DONE** — `cmd/infrasible-relay`, `internal/*` |
-| Unit / fake-conn acceptance | **PASS** — R1–R9, D1–D3, P1–P2 in-tree (`go test ./…`) |
+| Unit / fake-conn acceptance | **PASS** — R1–R9, D1–D3, P1–P3 in-tree (`go test ./…`); P4 ops-documented |
 | Lab mTLS + real Agent | **PASS** — `./scripts/lab-up.sh` |
-| Packaging + ship path | **DONE** — `packaging/`, `scripts/package-linux.sh`, tag-only **Relay Release**, [CI_CD.md](CI_CD.md) |
+| Packaging + ship path | **DONE** — deb/rpm (systemd + user/dirs) + tar.gz via `scripts/package-linux.sh`; tag-only **Relay Release**, [CI_CD.md](CI_CD.md) |
 | Desktop Live subscriber protocol | **STUB ONLY** — LogHub / NoopHub / BufferedHub |
 | Persistence API | **OUT OF SCOPE** |
 

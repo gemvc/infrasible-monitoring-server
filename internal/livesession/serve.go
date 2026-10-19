@@ -115,7 +115,7 @@ func ServeAgent(
 		closeReason = "hello_invalid"
 		return
 	}
-	if err := AuthorizeLive(entry, hello.AgentID, cfg.EndpointID); err != nil {
+	if err := registrar.AuthorizeLive(entry, hello.AgentID, cfg.EndpointID); err != nil {
 		reason := "channel_denied"
 		if errors.Is(err, registrar.ErrAgentMismatch) {
 			reason = "agent_mismatch"
@@ -265,32 +265,4 @@ func ServeAgent(
 type readResult struct {
 	data []byte
 	err  error
-}
-
-// AuthorizeLive checks Hello agent_id, live channel, and this endpoint.
-func AuthorizeLive(entry registrar.ACLEntry, agentIDFromHello, endpointID string) error {
-	if agentIDFromHello != entry.AgentID {
-		return registrar.ErrAgentMismatch
-	}
-	hasLive := false
-	for _, c := range entry.Channels {
-		if c == "live" {
-			hasLive = true
-			break
-		}
-	}
-	if !hasLive {
-		return registrar.ErrChannelDenied
-	}
-	okEP := false
-	for _, e := range entry.LiveEndpoints {
-		if e == endpointID {
-			okEP = true
-			break
-		}
-	}
-	if !okEP {
-		return registrar.ErrChannelDenied
-	}
-	return nil
 }

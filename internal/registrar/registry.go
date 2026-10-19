@@ -109,7 +109,7 @@ func (f *FileRegistry) Lookup(ctx context.Context, id ClientIdentity) (ACLEntry,
 }
 
 // AuthorizeLive checks Hello agent_id, live channel, and this endpoint.
-func (f *FileRegistry) AuthorizeLive(entry ACLEntry, agentIDFromHello, endpointID string) error {
+func AuthorizeLive(entry ACLEntry, agentIDFromHello, endpointID string) error {
 	if agentIDFromHello != entry.AgentID {
 		return ErrAgentMismatch
 	}
@@ -120,6 +120,11 @@ func (f *FileRegistry) AuthorizeLive(entry ACLEntry, agentIDFromHello, endpointI
 		return ErrChannelDenied
 	}
 	return nil
+}
+
+// AuthorizeLive is a method alias for call sites that already hold *FileRegistry.
+func (f *FileRegistry) AuthorizeLive(entry ACLEntry, agentIDFromHello, endpointID string) error {
+	return AuthorizeLive(entry, agentIDFromHello, endpointID)
 }
 
 func contains(ss []string, want string) bool {

@@ -49,6 +49,13 @@ internal/
 docs/                     PROMPT, STATUS, CI_CD; phases/P10 acceptance
 ```
 
+## Ops notes (v1)
+
+- **ACL reload:** file ACL is loaded once at process start. After editing `acl.json`, restart the unit (`systemctl restart infrasible-relay`) so new Agents are authorized; denials for removed rows persist until restart.
+- **Config check:** `infrasible-relay config validate --config=/etc/infrasible-relay/config.json` (exit 0 on good file; also checks ACL `endpoint_id` match).
+- **Observe:** JSON snapshot at `http://127.0.0.1:9090/metrics` (override bind with `RELAY_ADMIN_ADDR`; default localhost-only). Not Prometheus text format.
+- **Ship:** [`docs/CI_CD.md`](docs/CI_CD.md) via `bash scripts/ci-cd.sh`. Packages: `.deb` / `.rpm` (systemd + examples) and `.tar.gz`.
+
 ## Hard rules (v1)
 
 - mTLS success ≠ authorization — always ACL lookup after TLS  

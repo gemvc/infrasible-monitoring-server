@@ -50,7 +50,7 @@ Recorded **2026-10-20**. Fake-conn / unit suite: `go test ./...`. Lab mTLS path:
 | Case | Evidence |
 |---|---|
 | **R1** | `TestAcceptanceR1_UnknownIdentity` |
-| **R2** | `TestAcceptanceR2_HappyPath` |
+| **R2** | `TestAcceptanceR2_HappyPath` (live + peer HB + Relay→Agent HB) |
 | **R3** | Asserted inside `TestAcceptanceR2_HappyPath` (`authorized_agent_id` echo) |
 | **R4** | `TestAcceptanceR4_FirstNotHello` |
 | **R5** | `TestAcceptanceR5_DisconnectMarkStale` |
@@ -60,10 +60,10 @@ Recorded **2026-10-20**. Fake-conn / unit suite: `go test ./...`. Lab mTLS path:
 | **R9** | `TestAcceptanceR9_PersistencePOST` |
 | **D1/D2** | `TestLogHubNoPanic` |
 | **D3** | `TestAcceptanceD3_NoopHubHappyPath` |
-| **P1** | `TestAcceptanceP1_InvalidConfig` |
+| **P1** | `TestAcceptanceP1_InvalidConfig` (`Validate` fails → `run` exits before listen) |
 | **P2** | `TestAcceptanceP2_KeyModeNot0600` |
-| **P3** | Manual / CLI: `infrasible-relay config validate --config=…` (same `config.Validate` as P1/P2) |
-| **P4** | Documented: file ACL reload requires process restart (v1); lab restart after ACL edit |
+| **P3** | `TestAcceptanceP3_ConfigValidateCLI` (`validateConfigFile` / `config validate`) |
+| **P4** | Documented in README ops notes + PROMPT §8: ACL load-once; `systemctl restart` after edit |
 
 Do not claim production certification until PKI/Desktop owners sign off — staging “lab pass” is enough for Relay v1 implementer handoff.
 

@@ -114,7 +114,8 @@ func TestAcceptanceR2_HappyPath(t *testing.T) {
 		defer close(done)
 		ServeAgent(ctx, conn, registrar.ClientIdentity{FingerprintSHA256: "aa"},
 			reg, hub, obs, SessionConfig{
-				EndpointID: "relay-primary", HeartbeatSeconds: 15, MaxMessageBytes: 262144,
+				// 1s so R2 can assert Relay→Agent heartbeat without a long sleep
+				EndpointID: "relay-primary", HeartbeatSeconds: 1, MaxMessageBytes: 262144,
 			})
 	}()
 
@@ -140,7 +141,27 @@ func TestAcceptanceR2_HappyPath(t *testing.T) {
 		t.Fatal("no live publish")
 	}
 	conn.PushInbound(hb)
-	time.Sleep(20 * time.Millisecond)
+
+	// Relay → Agent heartbeat (both ways)
+	deadline = time.Now().Add(3 * time.Second)
+	sawRelayHB := false
+	for time.Now().Before(deadline) {
+		for _, b := range conn.Outbox() {
+			var m map[string]any
+			if json.Unmarshal(b, &m) == nil && m["type"] == "heartbeat" {
+				sawRelayHB = true
+				break
+			}
+		}
+		if sawRelayHB {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !sawRelayHB {
+		t.Fatal("R2: expected Relay→Agent heartbeat")
+	}
+
 	cancel()
 	<-done
 	if obs.Snapshot().HelloAccepts < 1 || obs.Snapshot().Frames < 1 {

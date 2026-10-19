@@ -1,0 +1,71 @@
+Name: infrasible-relay
+Version: @@VERSION@@
+Release: 1
+Summary: Infrasible monitoring Live bridge (inbound mTLS)
+License: Apache-2.0
+BuildArch: @@BUILDARCH@@
+Requires: /usr/sbin/useradd, /usr/bin/getent
+
+%description
+Infrasible monitoring Live bridge with inbound mTLS for Agents.
+File ACL authorization; Desktop stub hub. No PostgreSQL.
+
+%prep
+
+%build
+
+%install
+rm -rf %{buildroot}
+mkdir -p %{buildroot}/usr/bin
+mkdir -p %{buildroot}/usr/lib/systemd/system
+mkdir -p %{buildroot}/usr/share/infrasible-relay
+mkdir -p %{buildroot}/usr/share/doc/infrasible-relay
+mkdir -p %{buildroot}/etc/infrasible-relay
+mkdir -p %{buildroot}/var/lib/infrasible-relay
+install -m 0755 %{_sourcedir}/infrasible-relay %{buildroot}/usr/bin/infrasible-relay
+install -m 0644 %{_sourcedir}/infrasible-relay.service %{buildroot}/usr/lib/systemd/system/infrasible-relay.service
+install -m 0644 %{_sourcedir}/config.example.json %{buildroot}/usr/share/infrasible-relay/config.example.json
+install -m 0644 %{_sourcedir}/acl.example.json %{buildroot}/usr/share/infrasible-relay/acl.example.json
+install -m 0644 %{_sourcedir}/LICENSE %{buildroot}/usr/share/doc/infrasible-relay/LICENSE
+
+%pre
+getent passwd infrasible-relay >/dev/null 2>&1 || \
+	useradd --system --home-dir /var/lib/infrasible-relay --shell /sbin/nologin \
+		--comment "Infrasible Monitoring Relay" infrasible-relay
+
+%post
+install -d -m 0750 -o infrasible-relay -g infrasible-relay /var/lib/infrasible-relay
+install -d -m 0750 -o root -g infrasible-relay /etc/infrasible-relay
+if [ ! -e /etc/infrasible-relay/config.json ]; then
+	install -m 0640 -o root -g infrasible-relay \
+		/usr/share/infrasible-relay/config.example.json \
+		/etc/infrasible-relay/config.json
+fi
+if [ ! -e /etc/infrasible-relay/acl.json ]; then
+	install -m 0640 -o root -g infrasible-relay \
+		/usr/share/infrasible-relay/acl.example.json \
+		/etc/infrasible-relay/acl.json
+fi
+if command -v systemctl >/dev/null 2>&1; then
+	systemctl daemon-reload >/dev/null 2>&1 || true
+fi
+
+%preun
+if [ "$1" = "0" ] && command -v systemctl >/dev/null 2>&1; then
+	systemctl stop infrasible-relay.service >/dev/null 2>&1 || true
+	systemctl disable infrasible-relay.service >/dev/null 2>&1 || true
+fi
+
+%postun
+if command -v systemctl >/dev/null 2>&1; then
+	systemctl daemon-reload >/dev/null 2>&1 || true
+fi
+
+%files
+/usr/bin/infrasible-relay
+/usr/lib/systemd/system/infrasible-relay.service
+/usr/share/infrasible-relay/config.example.json
+/usr/share/infrasible-relay/acl.example.json
+/usr/share/doc/infrasible-relay/LICENSE
+%dir %attr(0750,root,infrasible-relay) /etc/infrasible-relay
+%dir %attr(0750,infrasible-relay,infrasible-relay) /var/lib/infrasible-relay

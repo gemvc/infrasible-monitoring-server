@@ -213,7 +213,7 @@ Upstream SSOT: Agent `docs/design/MONITORING_RELAY.md`.
 | `registrar` | `Registry.Lookup(ctx, id ClientIdentity)` | → `(ACLEntry, error)` |
 | `registrar` | `NewFileRegistry(path string)` | → `(*FileRegistry, error)` |
 | `livesession` | `ServeAgent(ctx, conn, id, reg, hub, obs, cfg)` | → (blocks until done) |
-| `livesession` | `SessionMap.Bind(agentID, s)` / `Unbind(agentID, s)` | replace / clear |
+| `livesession` | `SessionMap.Bind(agentID, closer)` / `Unbind(agentID, gen)` | replace older (cancel closer); clear if gen matches |
 | `fanout` | `SubscriberHub.PublishLive(agentID, frame []byte)` | drop-oldest if slow |
 | `fanout` | `SubscriberHub.MarkStale(agentID)` | notify stub/log |
 | `fanout` | `NewLogHub(logger)` / `NewNoopHub()` | stub implementations |
@@ -228,6 +228,7 @@ JSON ACL file (path from config). Example:
 
 ```json
 {
+  "acl_version": 1,
   "endpoint_id": "relay-primary",
   "agents": [
     {
@@ -242,7 +243,7 @@ JSON ACL file (path from config). Example:
 
 Lookup: fingerprint from client cert → entry → require `live` in `channels` and this `endpoint_id` in `live_endpoints`. Unknown → deny.
 
-Reload: document process restart for v1 (no hot reload required). Later: HTTP registrar client behind same `Registry` interface.
+Reload: **process restart required in v1** (no hot reload). After ACL edit: `systemctl restart infrasible-relay`. Later: HTTP registrar client behind same `Registry` interface.
 
 ---
 
@@ -282,7 +283,7 @@ Example `/etc/infrasible-relay/config.json`:
 }
 ```
 
-Observe (minimum): connected agents, auth rejects by reason, frames forwarded, drops, last frame age per agent. Expose via structured logs + optional Prometheus text endpoint **localhost-only** or Unix socket (document choice).
+Observe (minimum): connected agents, auth rejects by reason, frames forwarded, drops, last frame age per agent. Expose via structured JSON logs + **JSON** admin snapshot `GET /metrics` on `127.0.0.1:9090` by default (override with `RELAY_ADMIN_ADDR`). Not Prometheus exposition format.
 
 ---
 
@@ -304,10 +305,10 @@ Sync `VERSION.md` → `version.go` in CI (mirror Agent pattern). Never stamp pro
 - Config: `/etc/infrasible-relay/config.json`  
 - Data/TLS: `/var/lib/infrasible-relay/` — server key mode `0600`, owner service user.  
 - systemd unit: `infrasible-relay.service` — listens inbound WSS.  
-- Distros: Ubuntu/Debian (`.deb`) and RHEL/Fedora (`.rpm`).  
+- Distros: Ubuntu/Debian (`.deb`) and RHEL/Fedora (`.rpm`) — both install binary, systemd unit, example config/ACL, and create `infrasible-relay` user/dirs. Multi-arch `.tar.gz` always.  
 - Do **not** bundle PostgreSQL.
 
-Packaging: `packaging/` + `scripts/package-linux.sh`. Ship: [CI_CD.md](CI_CD.md).
+Packaging: `packaging/` + `scripts/package-linux.sh` (needs `dpkg-deb` / `rpmbuild` for native packages). Ship: [CI_CD.md](CI_CD.md).
 
 ---
 
@@ -352,7 +353,7 @@ Full matrix: [P10-ACCEPTANCE.md](phases/P10-ACCEPTANCE.md).
 
 ## 15. Remaining work
 
-v1 implementer exit is closed: [P10-ACCEPTANCE.md](phases/P10-ACCEPTANCE.md) R1–R9 evidence recorded. Ship via [CI_CD.md](CI_CD.md) when publishing a release.
+v1 implementer exit is closed: [P10-ACCEPTANCE.md](phases/P10-ACCEPTANCE.md) R1–R9 / D1–D3 / P1–P4 evidence recorded. Ship via [CI_CD.md](CI_CD.md) when publishing a release.
 
 ---
 

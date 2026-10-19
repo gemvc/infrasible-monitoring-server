@@ -57,25 +57,30 @@ func configCmd(args []string) {
 	fs := flag.NewFlagSet("config validate", flag.ExitOnError)
 	cfgPath := fs.String("config", "/etc/infrasible-relay/config.json", "path to config.json")
 	_ = fs.Parse(args[1:])
-	c, err := config.Load(*cfgPath)
-	if err != nil {
+	if err := validateConfigFile(*cfgPath); err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	if err := config.Validate(c); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	reg, err := registrar.NewFileRegistry(c.ACLFile)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	if reg.EndpointID() != c.EndpointID {
-		fmt.Fprintf(os.Stderr, "acl endpoint_id %q != config endpoint_id %q\n", reg.EndpointID(), c.EndpointID)
 		os.Exit(1)
 	}
 	fmt.Println("ok")
+}
+
+// validateConfigFile loads config + ACL and checks endpoint_id match (P3 CLI path).
+func validateConfigFile(cfgPath string) error {
+	c, err := config.Load(cfgPath)
+	if err != nil {
+		return err
+	}
+	if err := config.Validate(c); err != nil {
+		return err
+	}
+	reg, err := registrar.NewFileRegistry(c.ACLFile)
+	if err != nil {
+		return err
+	}
+	if reg.EndpointID() != c.EndpointID {
+		return fmt.Errorf("acl endpoint_id %q != config endpoint_id %q", reg.EndpointID(), c.EndpointID)
+	}
+	return nil
 }
 
 func runCmd(args []string) {
