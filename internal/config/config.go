@@ -24,10 +24,10 @@ type Config struct {
 	MaxMessageBytes  int    `json:"max_message_bytes"`
 	Hub              string `json:"hub"`
 	// Desktop subscriber (optional unless hub=desktop).
-	DesktopLivePath       string `json:"desktop_live_path,omitempty"`
-	DesktopClientCAFile   string `json:"desktop_client_ca_file,omitempty"`
-	DesktopACLFile        string `json:"desktop_acl_file,omitempty"`
-	DesktopQueueCapacity  int    `json:"desktop_queue_capacity,omitempty"`
+	DesktopLivePath      string `json:"desktop_live_path,omitempty"`
+	DesktopClientCAFile  string `json:"desktop_client_ca_file,omitempty"`
+	DesktopACLFile       string `json:"desktop_acl_file,omitempty"`
+	DesktopQueueCapacity int    `json:"desktop_queue_capacity,omitempty"`
 }
 
 // Load reads and parses config.json with unknown-field rejection.
