@@ -44,7 +44,7 @@ internal/
   tlsfront/               TLS 1.3 + mTLS listener
   registrar/              file ACL Registry
   livesession/            Hello, loop, session map, silence
-  fanout/                 SubscriberHub stub (LogHub / NoopHub)
+  fanout/                 SubscriberHub stub (LogHub / NoopHub / BufferedHub)
   observe/                counters (no secrets)
 docs/                     PROMPT, STATUS, CI_CD; phases/P10 acceptance
 ```

@@ -352,7 +352,7 @@ Full matrix: [P10-ACCEPTANCE.md](phases/P10-ACCEPTANCE.md).
 
 ## 15. Remaining work
 
-Core packages and packaging/CI path are in-tree. Exit when [P10-ACCEPTANCE.md](phases/P10-ACCEPTANCE.md) R1–R9 pass with evidence; ship via [CI_CD.md](CI_CD.md).
+v1 implementer exit is closed: [P10-ACCEPTANCE.md](phases/P10-ACCEPTANCE.md) R1–R9 evidence recorded. Ship via [CI_CD.md](CI_CD.md) when publishing a release.
 
 ---
 

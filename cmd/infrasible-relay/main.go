@@ -120,37 +120,7 @@ func runCmd(args []string) {
 	}
 	obs := observe.NewMetrics()
 	sessions := livesession.NewSessionMap()
-
-	mux := http.NewServeMux()
-	mux.HandleFunc(c.LivePath, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			// R9: Persistence-shaped POST not accepted as Live
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			obs.IncAuthReject("wrong_method")
-			return
-		}
-		id, err := tlsfront.ClientIdentityFromRequest(r)
-		if err != nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			obs.IncAuthReject("missing_client_cert")
-			return
-		}
-		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-			CompressionMode: websocket.CompressionDisabled,
-		})
-		if err != nil {
-			log.Info("ws.accept_failed", "err", err.Error())
-			return
-		}
-		ws := &wsConn{c: conn}
-		livesession.ServeAgent(r.Context(), ws, id, reg, hub, obs, livesession.SessionConfig{
-			EndpointID:       c.EndpointID,
-			HeartbeatSeconds: c.HeartbeatSeconds,
-			MaxMessageBytes:  c.MaxMessageBytes,
-			Logger:           log,
-			Sessions:         sessions,
-		})
-	})
+	mux := newLiveMux(c, reg, hub, obs, sessions, log)
 
 	// Observe snapshot — default localhost-only; lab may set RELAY_ADMIN_ADDR=0.0.0.0:9090
 	adminAddr := os.Getenv("RELAY_ADMIN_ADDR")
@@ -188,6 +158,47 @@ func runCmd(args []string) {
 		log.Error("relay.stop", "err", err.Error())
 		os.Exit(1)
 	}
+}
+
+func newLiveMux(
+	c config.Config,
+	reg registrar.Registry,
+	hub fanout.SubscriberHub,
+	obs *observe.Metrics,
+	sessions *livesession.SessionMap,
+	log *slog.Logger,
+) *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc(c.LivePath, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			// R9: Persistence-shaped POST not accepted as Live
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			obs.IncAuthReject("wrong_method")
+			return
+		}
+		id, err := tlsfront.ClientIdentityFromRequest(r)
+		if err != nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			obs.IncAuthReject("missing_client_cert")
+			return
+		}
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+			CompressionMode: websocket.CompressionDisabled,
+		})
+		if err != nil {
+			log.Info("ws.accept_failed", "err", err.Error())
+			return
+		}
+		ws := &wsConn{c: conn}
+		livesession.ServeAgent(r.Context(), ws, id, reg, hub, obs, livesession.SessionConfig{
+			EndpointID:       c.EndpointID,
+			HeartbeatSeconds: c.HeartbeatSeconds,
+			MaxMessageBytes:  c.MaxMessageBytes,
+			Logger:           log,
+			Sessions:         sessions,
+		})
+	})
+	return mux
 }
 
 type wsConn struct {

@@ -3,10 +3,12 @@ package livesession
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/gemvc/infrasible-monitoring-server/internal/fanout"
 	"github.com/gemvc/infrasible-monitoring-server/internal/observe"
 	"github.com/gemvc/infrasible-monitoring-server/internal/protocol"
 	"github.com/gemvc/infrasible-monitoring-server/internal/registrar"
@@ -146,6 +148,173 @@ func TestAcceptanceR2_HappyPath(t *testing.T) {
 	}
 	if len(hub.stale) != 1 || hub.stale[0] != agentID {
 		t.Fatalf("stale=%v", hub.stale)
+	}
+}
+
+func TestAcceptanceR5_DisconnectMarkStale(t *testing.T) {
+	agentID := "agt_1"
+	live := []byte(`{"type":"live","agent_id":"agt_1","frame":{"observed_at_ms":1,"elapsed_ms":1000,"metrics":{}}}`)
+	conn := NewFakeConn(helloJSON(agentID))
+	obs := observe.NewMetrics()
+	hub := &recordingHub{publish: make(chan struct{}, 1)}
+	reg := memReg{entry: registrar.ACLEntry{
+		AgentID: agentID, Channels: []string{"live"}, LiveEndpoints: []string{"ep"},
+	}}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ServeAgent(context.Background(), conn, registrar.ClientIdentity{FingerprintSHA256: "aa"},
+			reg, hub, obs, SessionConfig{EndpointID: "ep", HeartbeatSeconds: 15, MaxMessageBytes: 262144})
+	}()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(conn.Outbox()) > 0 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	conn.PushInbound(live)
+	select {
+	case <-hub.publish:
+	case <-time.After(2 * time.Second):
+		t.Fatal("no live publish")
+	}
+	published := len(hub.frames)
+	_ = conn.Close(StatusNormalClosure, "agent_gone")
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("session hung after disconnect")
+	}
+	hub.mu.Lock()
+	stale := append([]string(nil), hub.stale...)
+	frames := len(hub.frames)
+	hub.mu.Unlock()
+	if len(stale) != 1 || stale[0] != agentID {
+		t.Fatalf("MarkStale=%v", stale)
+	}
+	if frames != published {
+		t.Fatalf("history replay from Relay not allowed: before=%d after=%d", published, frames)
+	}
+}
+
+func TestAcceptanceR6_SlowHubOtherAgentsOK(t *testing.T) {
+	obs := observe.NewMetrics()
+	hub := fanout.NewBufferedHub(2, obs.IncDrops)
+
+	agentA := "agt_a"
+	agentB := "agt_b"
+	liveA := func(n int) []byte {
+		return []byte(`{"type":"live","agent_id":"agt_a","frame":{"observed_at_ms":` + strconv.Itoa(n) + `,"elapsed_ms":1000,"metrics":{}}}`)
+	}
+	liveB := []byte(`{"type":"live","agent_id":"agt_b","frame":{"observed_at_ms":1,"elapsed_ms":1000,"metrics":{}}}`)
+
+	regA := memReg{entry: registrar.ACLEntry{
+		AgentID: agentA, Channels: []string{"live"}, LiveEndpoints: []string{"ep"},
+	}}
+	regB := memReg{entry: registrar.ACLEntry{
+		AgentID: agentB, Channels: []string{"live"}, LiveEndpoints: []string{"ep"},
+	}}
+	sessions := NewSessionMap()
+	cfg := SessionConfig{EndpointID: "ep", HeartbeatSeconds: 15, MaxMessageBytes: 262144, Sessions: sessions}
+
+	cA := NewFakeConn(helloJSON(agentA))
+	cB := NewFakeConn(helloJSON(agentB))
+	doneA := make(chan struct{})
+	doneB := make(chan struct{})
+	go func() {
+		defer close(doneA)
+		ServeAgent(context.Background(), cA, registrar.ClientIdentity{FingerprintSHA256: "aa"}, regA, hub, obs, cfg)
+	}()
+	go func() {
+		defer close(doneB)
+		ServeAgent(context.Background(), cB, registrar.ClientIdentity{FingerprintSHA256: "bb"}, regB, hub, obs, cfg)
+	}()
+
+	waitAccept := func(c *FakeConn) {
+		deadline := time.Now().Add(2 * time.Second)
+		for time.Now().Before(deadline) {
+			if len(c.Outbox()) > 0 {
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		t.Fatal("hello_accepted timeout")
+	}
+	waitAccept(cA)
+	waitAccept(cB)
+
+	cA.PushInbound(liveA(1))
+	cA.PushInbound(liveA(2))
+	cA.PushInbound(liveA(3)) // capacity 2 → one drop for A
+	cB.PushInbound(liveB)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		snap := obs.Snapshot()
+		if snap.Drops >= 1 && snap.FramesByAgent[agentB] >= 1 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	snap := obs.Snapshot()
+	if snap.Drops < 1 || snap.DropsByAgent[agentA] < 1 {
+		t.Fatalf("expected drops for agt_a: %+v", snap)
+	}
+	if snap.DropsByAgent[agentB] != 0 {
+		t.Fatalf("agt_b must be unaffected: %+v", snap)
+	}
+	if hub.Len(agentB) < 1 {
+		t.Fatal("agt_b frame missing from hub")
+	}
+
+	_ = cA.Close(StatusNormalClosure, "done")
+	_ = cB.Close(StatusNormalClosure, "done")
+	<-doneA
+	<-doneB
+}
+
+func TestAcceptanceD3_NoopHubHappyPath(t *testing.T) {
+	agentID := "agt_noop"
+	live := []byte(`{"type":"live","agent_id":"agt_noop","frame":{"observed_at_ms":1,"elapsed_ms":1000,"metrics":{}}}`)
+	conn := NewFakeConn(helloJSON(agentID))
+	obs := observe.NewMetrics()
+	reg := memReg{entry: registrar.ACLEntry{
+		AgentID: agentID, Channels: []string{"live"}, LiveEndpoints: []string{"ep"},
+	}}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ServeAgent(ctx, conn, registrar.ClientIdentity{FingerprintSHA256: "aa"},
+			reg, fanout.NewNoopHub(), obs, SessionConfig{
+				EndpointID: "ep", HeartbeatSeconds: 15, MaxMessageBytes: 262144,
+			})
+	}()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		out := conn.Outbox()
+		if len(out) > 0 {
+			var m map[string]any
+			if json.Unmarshal(out[0], &m) == nil && m["type"] == "hello_accepted" {
+				break
+			}
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	conn.PushInbound(live)
+	deadline = time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if obs.Snapshot().Frames >= 1 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	cancel()
+	<-done
+	if obs.Snapshot().HelloAccepts < 1 || obs.Snapshot().Frames < 1 {
+		t.Fatalf("noop hub must still pass R2: %+v", obs.Snapshot())
 	}
 }
 
