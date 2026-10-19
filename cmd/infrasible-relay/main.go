@@ -17,6 +17,7 @@ import (
 
 	relayversion "github.com/gemvc/infrasible-monitoring-server"
 	"github.com/gemvc/infrasible-monitoring-server/internal/config"
+	"github.com/gemvc/infrasible-monitoring-server/internal/desktophub"
 	"github.com/gemvc/infrasible-monitoring-server/internal/fanout"
 	"github.com/gemvc/infrasible-monitoring-server/internal/livesession"
 	"github.com/gemvc/infrasible-monitoring-server/internal/observe"
@@ -116,16 +117,33 @@ func runCmd(args []string) {
 		os.Exit(1)
 	}
 
+	obs := observe.NewMetrics()
+	var desktop *desktophub.Hub
+	var desktopReg desktophub.Registry
 	var hub fanout.SubscriberHub
 	switch c.Hub {
 	case "noop":
 		hub = fanout.NewNoopHub()
+	case "desktop":
+		desktop = desktophub.NewHub(c.DesktopQueueCapacity, func(agentID string) {
+			obs.IncDrops(agentID)
+		})
+		var err error
+		desktopReg, err = desktophub.NewFileRegistry(c.DesktopACLFile)
+		if err != nil {
+			log.Error("desktop_acl.load", "err", err.Error())
+			os.Exit(1)
+		}
+		if desktopReg.EndpointID() != c.EndpointID {
+			log.Error("desktop_acl.endpoint_mismatch", "acl", desktopReg.EndpointID(), "config", c.EndpointID)
+			os.Exit(1)
+		}
+		hub = fanout.NewMultiHub(fanout.NewLogHub(log), desktop)
 	default:
 		hub = fanout.NewLogHub(log)
 	}
-	obs := observe.NewMetrics()
 	sessions := livesession.NewSessionMap()
-	mux := newLiveMux(c, reg, hub, obs, sessions, log)
+	mux := newLiveMux(c, reg, hub, obs, sessions, log, desktop, desktopReg)
 
 	// Observe snapshot — default localhost-only; lab may set RELAY_ADMIN_ADDR=0.0.0.0:9090
 	adminAddr := os.Getenv("RELAY_ADMIN_ADDR")
@@ -151,13 +169,20 @@ func runCmd(args []string) {
 		"version", relayversion.Version,
 		"listen", c.ListenAddr,
 		"live_path", c.LivePath,
+		"desktop_live_path", c.DesktopLivePath,
+		"hub", c.Hub,
 		"endpoint_id", c.EndpointID,
 	)
+	extraCAs := []string{}
+	if strings.TrimSpace(c.DesktopClientCAFile) != "" {
+		extraCAs = append(extraCAs, c.DesktopClientCAFile)
+	}
 	err = tlsfront.ListenAndServe(ctx, tlsfront.TLSConfig{
-		ListenAddr:     c.ListenAddr,
-		ServerCertFile: c.ServerCertFile,
-		ServerKeyFile:  c.ServerKeyFile,
-		ClientCAFile:   c.ClientCAFile,
+		ListenAddr:         c.ListenAddr,
+		ServerCertFile:     c.ServerCertFile,
+		ServerKeyFile:      c.ServerKeyFile,
+		ClientCAFile:       c.ClientCAFile,
+		ExtraClientCAFiles: extraCAs,
 	}, mux)
 	if err != nil {
 		log.Error("relay.stop", "err", err.Error())
@@ -172,6 +197,8 @@ func newLiveMux(
 	obs *observe.Metrics,
 	sessions *livesession.SessionMap,
 	log *slog.Logger,
+	desktop *desktophub.Hub,
+	desktopReg desktophub.Registry,
 ) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc(c.LivePath, func(w http.ResponseWriter, r *http.Request) {
@@ -203,6 +230,37 @@ func newLiveMux(
 			Sessions:         sessions,
 		})
 	})
+	if desktop != nil && desktopReg != nil && strings.TrimSpace(c.DesktopLivePath) != "" {
+		path := c.DesktopLivePath
+		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				obs.IncAuthReject("wrong_method")
+				return
+			}
+			id, err := tlsfront.ClientIdentityFromRequest(r)
+			if err != nil {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				obs.IncAuthReject("missing_client_cert")
+				return
+			}
+			conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+				CompressionMode: websocket.CompressionDisabled,
+			})
+			if err != nil {
+				log.Info("desktop.ws.accept_failed", "err", err.Error())
+				return
+			}
+			ws := &wsConn{c: conn}
+			desktophub.ServeDesktop(r.Context(), ws, id, desktopReg, desktop, obs, desktophub.SessionConfig{
+				EndpointID:       c.EndpointID,
+				HeartbeatSeconds: c.HeartbeatSeconds,
+				MaxMessageBytes:  c.MaxMessageBytes,
+				Logger:           log,
+				QueryAgentID:     strings.TrimSpace(r.URL.Query().Get("agent_id")),
+			})
+		})
+	}
 	return mux
 }
 

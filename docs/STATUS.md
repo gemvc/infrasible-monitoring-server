@@ -14,10 +14,10 @@ This file is the only place that states whether the brief and implementation are
 | Unit / fake-conn acceptance | **PASS** — R1–R9, D1–D3, P1–P3 in-tree (`go test ./…`); P4 ops-documented |
 | Lab mTLS + real Agent | **PASS** — `./scripts/lab-up.sh` |
 | Packaging + ship path | **DONE** — deb/rpm (systemd + user/dirs) + tar.gz via `scripts/package-linux.sh`; tag-only **Relay Release**, [CI_CD.md](CI_CD.md) |
-| Desktop Live subscriber protocol | **STUB ONLY** — LogHub / NoopHub / BufferedHub |
+| Desktop Live subscriber protocol | **SHIPPED (v0.2.x add-on)** — `DesktopHub` + `/v2/desktop/live` (mTLS Desktop CA + Desktop ACL); Agent Live path unchanged |
 | Persistence API | **OUT OF SCOPE** |
 
-**Bottom line:** v1 implementer exit criteria met. Ship with `bash scripts/ci-cd.sh version` / `release` when ready to publish.
+**Bottom line:** v1 Agent Live exit criteria met; Desktop subscriber dial path is available behind `hub: "desktop"`. Ship with `bash scripts/ci-cd.sh version` / `release` when ready to publish.
 
 ## How to use
 

@@ -37,7 +37,7 @@ func TestAcceptanceR9_PersistencePOST(t *testing.T) {
 		HeartbeatSeconds: 15,
 		MaxMessageBytes:  262144,
 	}
-	mux := newLiveMux(cfg, stubReg{}, fanout.NewNoopHub(), obs, livesession.NewSessionMap(), slog.Default())
+	mux := newLiveMux(cfg, stubReg{}, fanout.NewNoopHub(), obs, livesession.NewSessionMap(), slog.Default(), nil, nil)
 
 	body := `{"final":true,"agent_id":"agt_1","metrics":{}}`
 	req := httptest.NewRequest(http.MethodPost, cfg.LivePath, strings.NewReader(body))

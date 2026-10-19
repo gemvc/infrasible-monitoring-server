@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gemvc/infrasible-monitoring-server/internal/registrar"
@@ -19,7 +20,9 @@ type TLSConfig struct {
 	ServerCertFile string
 	ServerKeyFile  string
 	ClientCAFile   string
-	MinVersion     uint16 // default tls.VersionTLS13
+	// ExtraClientCAFiles are merged into ClientCAs (e.g. Desktop CA alongside Agent CA).
+	ExtraClientCAFiles []string
+	MinVersion         uint16 // default tls.VersionTLS13
 }
 
 // ListenAndServe starts an mTLS HTTPS server until ctx is cancelled.
@@ -31,13 +34,9 @@ func ListenAndServe(ctx context.Context, cfg TLSConfig, handler http.Handler) er
 	if err != nil {
 		return fmt.Errorf("load server cert: %w", err)
 	}
-	caPEM, err := os.ReadFile(cfg.ClientCAFile)
+	pool, err := loadClientCAPool(cfg.ClientCAFile, cfg.ExtraClientCAFiles...)
 	if err != nil {
-		return fmt.Errorf("read client ca: %w", err)
-	}
-	pool := x509.NewCertPool()
-	if !pool.AppendCertsFromPEM(caPEM) {
-		return fmt.Errorf("parse client ca: no certificates")
+		return err
 	}
 	tlsCfg := &tls.Config{
 		Certificates: []tls.Certificate{cert},
@@ -71,6 +70,29 @@ func ListenAndServe(ctx context.Context, cfg TLSConfig, handler http.Handler) er
 		}
 		return err
 	}
+}
+
+func loadClientCAPool(primary string, extras ...string) (*x509.CertPool, error) {
+	pool := x509.NewCertPool()
+	paths := append([]string{primary}, extras...)
+	loaded := 0
+	for _, path := range paths {
+		if strings.TrimSpace(path) == "" {
+			continue
+		}
+		caPEM, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read client ca %s: %w", path, err)
+		}
+		if !pool.AppendCertsFromPEM(caPEM) {
+			return nil, fmt.Errorf("parse client ca %s: no certificates", path)
+		}
+		loaded++
+	}
+	if loaded == 0 {
+		return nil, fmt.Errorf("no client CA files configured")
+	}
+	return pool, nil
 }
 
 // ClientIdentityFromRequest extracts the leaf client cert fingerprint.

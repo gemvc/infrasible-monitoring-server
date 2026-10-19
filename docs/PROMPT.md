@@ -46,7 +46,7 @@ Read this document completely before writing code. Remaining phase brief: [P10-A
 6. **Never block Agent readers** on slow Desktop — drop oldest live frames; count drops.  
 7. **No secrets in logs** — no private keys, full cert PEMs, or tokens.  
 8. **Protocol major 2** — reject other majors. Prefer `heartbeat_seconds: 15`.  
-9. **v1 Desktop = stub** — implement `SubscriberHub` interface; do not invent final Desktop wire.  
+9. **Desktop = SubscriberHub** — `DesktopHub` on `/v2/desktop/live`; do not rewrite Agent Live/Hello.  
 10. **Clean module boundaries** — see §4.
 
 ---
@@ -247,10 +247,9 @@ Reload: **process restart required in v1** (no hot reload). After ACL edit: `sys
 
 ---
 
-## 9. Desktop stub (v1)
+## 9. Desktop subscriber (add-on; Agent path frozen)
 
-Transible **Desktop already exists** but is **not ready** to consume realtime Live or historic APIs.  
-Your v1 job:
+Transible **Desktop dials Relay** on a separate WSS path. Do **not** reuse `/v2/agents/live` or Agent Hello.
 
 ```go
 type SubscriberHub interface {
@@ -259,7 +258,16 @@ type SubscriberHub interface {
 }
 ```
 
-Ship `LogHub` (debug) and `NoopHub`. When Desktop is ready, add `DesktopHub` behind the **same** interface without changing `livesession`.
+| Piece | Contract |
+|---|---|
+| Interface | Same `SubscriberHub`; `DesktopHub` + `MultiHub(LogHub, DesktopHub)` |
+| Path | `/v2/desktop/live` (`desktop_live_path`; optional `?agent_id=`) |
+| Trust | TLS 1.3 mTLS with **Desktop client CA** (`desktop_client_ca_file`, merged into listener ClientCAs) |
+| AuthZ | Desktop ACL (`desktop_acl_file`): fingerprint → `operator_id` + `allowed_agent_ids` — **not** Agent ACL / Hello |
+| Wire | First message `desktop_subscribe` → `subscribe_accepted`; then forward Agent `type: live` bytes; `type: stale` on `MarkStale`; heartbeats both ways |
+| Backpressure | Per-subscriber drop-oldest queue (R6); never block Agent readers |
+
+Ship `LogHub`, `NoopHub`, `BufferedHub`, and `DesktopHub`. Wire Desktop from `cmd/infrasible-relay` only; **do not** edit `livesession.ServeAgent`.
 
 ---
 
@@ -361,7 +369,7 @@ v1 implementer exit is closed: [P10-ACCEPTANCE.md](phases/P10-ACCEPTANCE.md) R1�
 
 - Persistence API / PostgreSQL / 900s ACK  
 - Historical charts API  
-- Real Desktop subscriber protocol  
+- Historic Desktop charts API / Persistence merge  
 - PKI issuance/rotation automation (operators stage certs; file ACL is enough for lab)  
 - Embedding Agent collectors inside Relay  
 - Dual-mode “Agent or Relay” binary  

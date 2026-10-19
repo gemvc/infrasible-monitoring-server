@@ -22,7 +22,17 @@ openssl x509 -req -in agent.csr -CA ca.pem -CAkey ca.key -CAcreateserial \
   -out agent.crt -days 825 -sha256
 chmod 600 agent.key
 
+# Separate Desktop CA (parallel to Agent CA; not Agent Hello).
+openssl req -x509 -newkey rsa:2048 -nodes -keyout desktop-ca.key -out desktop-ca.pem -days 3650 \
+  -subj "/CN=Infrasible Lab Desktop CA"
+openssl req -newkey rsa:2048 -nodes -keyout desktop.key -out desktop.csr \
+  -subj "/CN=desktop_lab_01"
+openssl x509 -req -in desktop.csr -CA desktop-ca.pem -CAkey desktop-ca.key -CAcreateserial \
+  -out desktop.crt -days 825 -sha256
+chmod 600 desktop.key desktop-ca.key
+
 FP=$(openssl x509 -in agent.crt -outform DER | openssl dgst -sha256 | awk '{print $2}')
+DFP=$(openssl x509 -in desktop.crt -outform DER | openssl dgst -sha256 | awk '{print $2}')
 cat > acl.json <<EOF
 {
   "acl_version": 1,
@@ -34,6 +44,21 @@ cat > acl.json <<EOF
       "channels": ["live"],
       "live_endpoints": ["relay-primary"],
       "comment": "lab agent"
+    }
+  ]
+}
+EOF
+
+cat > desktop-acl.json <<EOF
+{
+  "acl_version": 1,
+  "endpoint_id": "relay-primary",
+  "desktops": [
+    {
+      "operator_id": "op_lab",
+      "cert_fingerprint_sha256": "${DFP}",
+      "allowed_agent_ids": ["agt_lab_01"],
+      "comment": "lab desktop subscriber"
     }
   ]
 }
@@ -51,10 +76,16 @@ cat > config.json <<EOF
   "acl_file": "$(pwd)/acl.json",
   "heartbeat_seconds": 15,
   "max_message_bytes": 262144,
-  "hub": "log"
+  "hub": "desktop",
+  "desktop_live_path": "/v2/desktop/live",
+  "desktop_client_ca_file": "$(pwd)/desktop-ca.pem",
+  "desktop_acl_file": "$(pwd)/desktop-acl.json",
+  "desktop_queue_capacity": 8
 }
 EOF
 
 echo "Lab material written to $OUT"
 echo "Agent fingerprint: $FP"
+echo "Desktop fingerprint: $DFP"
 echo "Run: go run ./cmd/infrasible-relay run --config=$OUT/config.json"
+echo "Desktop WSS: wss://127.0.0.1:8443/v2/desktop/live?agent_id=agt_lab_01"
