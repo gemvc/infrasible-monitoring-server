@@ -46,7 +46,7 @@ internal/
   livesession/            Hello, loop, session map, silence
   fanout/                 SubscriberHub stub (LogHub / NoopHub)
   observe/                counters (no secrets)
-docs/                     implementer brief (phases P00–P11)
+docs/                     PROMPT, STATUS, CI_CD; phases/P10 acceptance
 ```
 
 ## Hard rules (v1)

@@ -2,7 +2,7 @@
 
 **Doc-set version:** [`VERSION.md`](VERSION.md) (one line `X.Y.Z` — version of this *brief*)  
 **Relay product version:** [`../VERSION.md`](../VERSION.md)  
-**Updated:** 2026-10-19
+**Updated:** 2026-10-20
 
 This file is the only place that states whether the brief and implementation are ready. Do not duplicate pass/fail tables elsewhere.
 
@@ -10,19 +10,23 @@ This file is the only place that states whether the brief and implementation are
 
 | Track | Status |
 |---|---|
-| Implementer brief (`PROMPT.md` + `phases/`) | **READY** |
-| Relay Go implementation | **IN PROGRESS** — core packages in this repo (`cmd/infrasible-relay`, `internal/*`) |
-| Unit / fake-conn acceptance | **PARTIAL** — R1, R2/R3, R4, R7, R8 covered in `internal/livesession`; R5 via MarkStale on exit; R6 queue unit test; R9 method check in HTTP handler |
-| Lab mTLS + real Agent | **PASS** — Docker Desktop lab (`./scripts/lab-up.sh`): Hello → `session.accepted` → `hub.publish_live` against published Agent from GitHub |
-| Packaging / CI port (P08–P09) | **NOT STARTED** — systemd unit stub only; Relay CI workflow present |
+| Implementer brief (`PROMPT.md`) | **READY** — completed phase briefs removed; open gate is P10 |
+| Relay Go implementation | **DONE** — `cmd/infrasible-relay`, `internal/*` |
+| Unit / fake-conn acceptance | **PARTIAL** — R1, R2/R3, R4, R7, R8 in `internal/livesession`; R5/R6/R9 partial |
+| Lab mTLS + real Agent | **PASS** — `./scripts/lab-up.sh` |
+| Packaging + ship path | **DONE** — `packaging/`, `scripts/package-linux.sh`, tag-only **Relay Release**, [CI_CD.md](CI_CD.md) |
 | Desktop Live subscriber protocol | **STUB ONLY** — LogHub / NoopHub |
 | Persistence API | **OUT OF SCOPE** |
 
-**Bottom line:** Relay v1 core (protocol, registrar, livesession, tlsfront, config, cmd) is scaffolded and unit-tested. Finish lab Agent proof, packaging, and Agent-style `ci-cd.sh` before claiming R1–R9 complete.
+**Bottom line:** v1 core and ship tooling are in place. Close [phases/P10-ACCEPTANCE.md](phases/P10-ACCEPTANCE.md) R1–R9 with evidence, then `bash scripts/ci-cd.sh version` / `release`.
 
 ## How to use
 
 1. Read [`../README.md`](../README.md).  
-2. Read [`PROMPT.md`](PROMPT.md) end-to-end.  
-3. Follow [`phases/P11-BUILD_ORDER.md`](phases/P11-BUILD_ORDER.md).  
+2. Operator ship: [`CI_CD.md`](CI_CD.md) via `scripts/ci-cd.sh`.  
+3. Product brief: [`PROMPT.md`](PROMPT.md).  
 4. Exit when [`phases/P10-ACCEPTANCE.md`](phases/P10-ACCEPTANCE.md) R1–R9 pass with evidence.
+
+## Phases folder
+
+Completed briefs (P00–P09, P11) were removed after implementation. Only **P10** remains under `phases/`.

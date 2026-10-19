@@ -4,7 +4,7 @@
 **Primary job (v1):** accept many Agent Live WebSocket sessions (mTLS + Hello + `type: live` + heartbeats), authorize via file ACL, keep one session per `agent_id`, expose observe metrics, and call a **Desktop stub hub** (no real Desktop protocol yet).  
 **Success:** acceptance cases R1–R9 in [phases/P10-ACCEPTANCE.md](phases/P10-ACCEPTANCE.md) pass against a real Agent or the Agent’s contract expectations.
 
-Read this document completely before writing code. Depth lives in [phases/](phases/). Doc readiness: [STATUS.md](STATUS.md).
+Read this document completely before writing code. Remaining phase brief: [P10-ACCEPTANCE.md](phases/P10-ACCEPTANCE.md). Ship ops: [CI_CD.md](CI_CD.md). Doc readiness: [STATUS.md](STATUS.md).
 
 ---
 
@@ -34,8 +34,6 @@ Read this document completely before writing code. Depth lives in [phases/](phas
 
 **Monitor the Relay host:** install a normal Infrasible Agent on the same machine (sidecar). Prefer pointing that Agent at a peer Relay when possible so a dead primary does not blind you.
 
-Depth: [P00-CONTEXT.md](phases/P00-CONTEXT.md).
-
 ---
 
 ## 2. Hard rules (fail closed)
@@ -49,9 +47,7 @@ Depth: [P00-CONTEXT.md](phases/P00-CONTEXT.md).
 7. **No secrets in logs** — no private keys, full cert PEMs, or tokens.  
 8. **Protocol major 2** — reject other majors. Prefer `heartbeat_seconds: 15`.  
 9. **v1 Desktop = stub** — implement `SubscriberHub` interface; do not invent final Desktop wire.  
-10. **Clean module boundaries** — see §4 and [P02](phases/P02-ARCHITECTURE.md).
-
-Requirements list: [P01-REQUIREMENTS.md](phases/P01-REQUIREMENTS.md).
+10. **Clean module boundaries** — see §4.
 
 ---
 
@@ -104,8 +100,7 @@ infrasible-relay/
 - `observe` must not decide AuthZ.  
 - No global mutable “god” struct that every package writes.
 
-Architecture depth: [P02-ARCHITECTURE.md](phases/P02-ARCHITECTURE.md).  
-API signatures: [P04-MODULE_API.md](phases/P04-MODULE_API.md).
+Implemented under `cmd/infrasible-relay` and `internal/{config,protocol,registrar,livesession,fanout,observe,tlsfront}`.
 
 ---
 
@@ -117,9 +112,6 @@ API signatures: [P04-MODULE_API.md](phases/P04-MODULE_API.md).
 | **B** Registrar ACL | Cert identity → `agent_id` + `live` channel + this endpoint | Close |
 | **C** Hello | First message `agent_hello`; echo `authorized_agent_id` | Close |
 | **D** Session | Heartbeats both ways; silence ≈ 3× interval; size cap | Close + MarkStale |
-
-Wire detail: [P03-WIRE_AGENT_LIVE.md](phases/P03-WIRE_AGENT_LIVE.md).  
-File ACL: [P05-REGISTRAR_FILE.md](phases/P05-REGISTRAR_FILE.md).
 
 ---
 
@@ -228,8 +220,6 @@ Upstream SSOT: Agent `docs/design/MONITORING_RELAY.md`.
 | `observe` | `Metrics` counters + `IncAuthReject(reason)` | no secrets |
 | `config` | `Load(path) (Config, error)` + `Validate(Config) error` | fail at start |
 
-Full signatures: [P04-MODULE_API.md](phases/P04-MODULE_API.md).
-
 ---
 
 ## 8. File registrar (v1)
@@ -254,8 +244,6 @@ Lookup: fingerprint from client cert → entry → require `live` in `channels` 
 
 Reload: document process restart for v1 (no hot reload required). Later: HTTP registrar client behind same `Registry` interface.
 
-Detail: [P05-REGISTRAR_FILE.md](phases/P05-REGISTRAR_FILE.md).
-
 ---
 
 ## 9. Desktop stub (v1)
@@ -271,8 +259,6 @@ type SubscriberHub interface {
 ```
 
 Ship `LogHub` (debug) and `NoopHub`. When Desktop is ready, add `DesktopHub` behind the **same** interface without changing `livesession`.
-
-Detail: [P06-DESKTOP_STUB.md](phases/P06-DESKTOP_STUB.md).
 
 ---
 
@@ -298,8 +284,6 @@ Example `/etc/infrasible-relay/config.json`:
 
 Observe (minimum): connected agents, auth rejects by reason, frames forwarded, drops, last frame age per agent. Expose via structured logs + optional Prometheus text endpoint **localhost-only** or Unix socket (document choice).
 
-Detail: [P07-CONFIG_AND_OPS.md](phases/P07-CONFIG_AND_OPS.md).
-
 ---
 
 ## 11. Versioning
@@ -323,44 +307,28 @@ Sync `VERSION.md` → `version.go` in CI (mirror Agent pattern). Never stamp pro
 - Distros: Ubuntu/Debian (`.deb`) and RHEL/Fedora (`.rpm`).  
 - Do **not** bundle PostgreSQL.
 
-Detail: [P08-PACKAGING_LINUX.md](phases/P08-PACKAGING_LINUX.md).
+Packaging: `packaging/` + `scripts/package-linux.sh`. Ship: [CI_CD.md](CI_CD.md).
 
 ---
 
-## 13. CI / CD (exactly this Agent project)
+## 13. CI / CD
 
-Port Agent [`docs/CI_CD.md`](../docs/CI_CD.md), [`scripts/ci-cd.sh`](../scripts/ci-cd.sh), [`.github/workflows/ci.yml`](../.github/workflows/ci.yml), [`.github/workflows/release.yml`](../.github/workflows/release.yml), and [`scripts/package-linux.sh`](../scripts/package-linux.sh). Rename Agent → Relay / `agentVersion` → `relayVersion` only. Do not invent a different ship model.
+Operator manual: [CI_CD.md](CI_CD.md). Use `scripts/ci-cd.sh` only — do not create tags by hand.
 
 | Where | When | What |
 |---|---|---|
-| `scripts/ci-cd.sh` | daily / ship | check, version, release |
-| **Relay CI** | every push / PR | `gofmt`, tidy, vet, race tests |
-| **Relay Release** | tag `vX.Y.Z` only | Linux packages + GitHub Release |
+| `scripts/ci-cd.sh check` | local | `gofmt`, tidy, vet, race tests |
+| `scripts/ci-cd.sh version` | prepare | bump `VERSION.md` + sync `version.go`, push |
+| `scripts/ci-cd.sh release` | publish | tag `vX.Y.Z` |
+| **Relay Release** | tag on **main** only | verify + Linux packages + GitHub Release |
 
-Push to `main` never publishes a Release. Semver SSOT: Relay `VERSION.md` (one line); `version` syncs `version.go`.
-
-### Everyday
-
-```sh
-git add … && git commit -m "…" && git push
-bash scripts/ci-cd.sh watch   # optional
-bash scripts/ci-cd.sh check   # optional local gate (gofmt, tidy, vet, race tests)
-```
-
-### Ship
+Ordinary pushes to `main` do not run GitHub Actions. Semver SSOT: `VERSION.md` (one line).
 
 ```sh
-bash scripts/ci-cd.sh watch   # optional
-bash scripts/ci-cd.sh check   # optional local gate
-bash scripts/ci-cd.sh last
-bash scripts/ci-cd.sh version X.Y.Z   # write VERSION.md + sync version.go, commit, push, watch Relay CI
-bash scripts/ci-cd.sh release X.Y.Z   # tag vX.Y.Z, watch Relay Release
+bash scripts/ci-cd.sh version X.Y.Z
+bash scripts/ci-cd.sh release X.Y.Z
 gh release view vX.Y.Z
 ```
-
-Do not reuse an existing `vX.Y.Z` tag. Do not commit `dist/`. Local packages without tagging: `bash scripts/package-linux.sh`.
-
-Full port checklist + workflow YAML: [P09-CI_CD.md](phases/P09-CI_CD.md).
 
 ---
 
@@ -382,9 +350,9 @@ Full matrix: [P10-ACCEPTANCE.md](phases/P10-ACCEPTANCE.md).
 
 ---
 
-## 15. Build order
+## 15. Remaining work
 
-Follow [P11-BUILD_ORDER.md](phases/P11-BUILD_ORDER.md): protocol → registrar → tlsfront → livesession → observe → config/main → packaging → CI → lab with real Agent.
+Core packages and packaging/CI path are in-tree. Exit when [P10-ACCEPTANCE.md](phases/P10-ACCEPTANCE.md) R1–R9 pass with evidence; ship via [CI_CD.md](CI_CD.md).
 
 ---
 

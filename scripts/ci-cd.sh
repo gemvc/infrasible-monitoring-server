@@ -11,7 +11,7 @@
 #   bash scripts/ci-cd.sh help
 #
 # Semver single source of truth: VERSION.md (one line, X.Y.Z).
-# See docs/phases/P09-CI_CD.md
+# See docs/CI_CD.md
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -77,7 +77,7 @@ require_release_pipeline() {
   [[ -f scripts/package-linux.sh ]] || missing+=("scripts/package-linux.sh")
   [[ -f packaging/systemd/infrasible-relay.service ]] || missing+=("packaging/systemd/infrasible-relay.service")
   if ((${#missing[@]})); then
-    die "cannot release — missing: ${missing[*]} (see docs/phases/P09-CI_CD.md)"
+    die "cannot release — missing: ${missing[*]} (see docs/CI_CD.md)"
   fi
   # Tag triggers workflows from the tagged commit; files must already be on origin/main.
   git show "origin/main:.github/workflows/release.yml" >/dev/null 2>&1 || \

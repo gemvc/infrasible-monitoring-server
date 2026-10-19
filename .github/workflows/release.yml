@@ -1,6 +1,6 @@
 # Sole GitHub workflow: verify + package + publish on tag vX.Y.Z whose commit is on main.
 # Ordinary pushes to main do not run Actions — local gate is: bash scripts/ci-cd.sh check
-# See docs/phases/P09-CI_CD.md
+# See docs/CI_CD.md
 name: Relay Release
 on:
   push:
