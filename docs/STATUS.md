@@ -17,7 +17,7 @@ This file is the only place that states whether the brief and implementation are
 | Desktop Live subscriber protocol | **SHIPPED (v0.2.x add-on)** — `DesktopHub` + `/v2/desktop/live` (mTLS Desktop CA + Desktop ACL); Agent Live path unchanged |
 | Persistence API | **OUT OF SCOPE** |
 
-**Bottom line:** v1 Agent Live exit criteria met; Desktop subscriber dial path is available behind `hub: "desktop"`. Ship with `bash scripts/ci-cd.sh version` / `release` when ready to publish.
+**Bottom line:** v1 Agent Live exit criteria met; Desktop subscriber dial path is available behind `hub: "desktop"`. On 2026-10-23 an operator reported a working Agent → Relay → Desktop Live flow. That operator observation complements the lab tests; it is not a substitute for production PKI, reconnect/failure, security or release-candidate qualification. Durable history belongs to a separate Persistence service, not Relay. Ship with `bash scripts/ci-cd.sh version` / `release` when ready to publish.
 
 ## How to use
 
