@@ -385,4 +385,4 @@ v1 implementer exit is closed: [P10-ACCEPTANCE.md](phases/P10-ACCEPTANCE.md) R1�
 5. Disconnect Agent → `MarkStale` logged.  
 6. R1–R9 automated or manual checklist signed.
 
-When Desktop becomes ready, implement a real hub behind `SubscriberHub` without rewriting the Agent Live path.
+**Historical instruction, now completed:** DesktopHub and the `/v2/desktop/live` subscriber endpoint have been implemented. Refer to [STATUS](STATUS.md) for the canonical current verdict and remaining production qualification; do not build a second hub.
